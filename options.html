@@ -46,6 +46,17 @@
             margin-bottom: 30px;
         }
 
+        .shortcut-hint {
+            background: #e8f1ff;
+            border-left: 4px solid #2b8ded;
+            padding: 12px 16px;
+            border-radius: 6px;
+            color: #1c4a82;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
         label {
             display: block;
             margin-bottom: 20px;
@@ -93,7 +104,12 @@
 
 <body>
     <div class="container">
-        <h2>KKTIX 搶票設定</h2>
+        <h2>TicketPlus 搶票設定</h2>
+
+        <div class="shortcut-hint">
+            使用快捷鍵 <strong>Ctrl + Space</strong> 可快速啟動或停止搶票機器人，
+            也可以在 <code>chrome://extensions/shortcuts</code> 調整。
+        </div>
 
         <label>場次關鍵字（可空白，可多個，用空格分隔）:
             <input type="text" id="session" placeholder="例如：高雄 下午場">
@@ -101,8 +117,8 @@
         </label>
 
         <label>搶票日期:
-            <input type="text" id="date" placeholder="例如：07/12">
-            <small>格式：06/01</small>
+            <input type="text" id="date" placeholder="例如：07/12 或 2025/07/12">
+            <small>格式：07/12 或 2025/07/12</small>
         </label>
 
         <label>日期搜尋順序:
@@ -114,8 +130,8 @@
         </label>
 
         <label>票價關鍵字（可多個，用空格分隔）:
-            <input type="text" id="price" placeholder="例如：3000">
-            <small>格式：2880</small>
+            <input type="text" id="price" placeholder="例如：3000 或 NT$3000">
+            <small>格式：3000、NT$3000</small>
         </label>
 
         <label>票種關鍵字（可多個，用空格分隔）:

@@ -1,161 +1,427 @@
-// ✅ 模擬使用者點擊（取代 .click()）
 function simulateClick(element) {
     const event = new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
-        view: window
+        view: window,
     });
     element.dispatchEvent(event);
 }
 
-// ✅ 主搶票程式
+function getNormalizedText(node) {
+    return (node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function generateKeywordList(raw) {
+    return (raw || "")
+        .split(/\s+/)
+        .map(keyword => keyword.trim())
+        .filter(Boolean);
+}
+
+function normalizeForPriceComparison(text) {
+    return text.replace(/[\s,，]/g, "").toLowerCase();
+}
+
+function findTicketContainer(element) {
+    const selector = [
+        '[class*="ticket"]',
+        '[class*="Ticket"]',
+        '[class*="fare"]',
+        '[class*="Fare"]',
+        '[class*="plan"]',
+        '[class*="Plan"]',
+        '[class*="row"]',
+        '[class*="Row"]',
+        '[class*="item"]',
+        '[class*="Item"]',
+        '[class*="card"]',
+        '[class*="Card"]',
+        'li',
+        'tr',
+        'section',
+        'article',
+    ].join(', ');
+
+    let container = element.closest(selector) || element.parentElement;
+
+    while (container && container !== document.body) {
+        const text = getNormalizedText(container);
+        if (text && text.length <= 1600 && /\d/.test(text)) {
+            return container;
+        }
+        container = container.parentElement;
+    }
+
+    return null;
+}
+
+function isPotentialTicketContainer(text) {
+    if (!text) {
+        return false;
+    }
+    const lower = text.toLowerCase();
+    const hasPrice = /\d/.test(text) && (lower.includes("nt") || text.includes("$") || lower.includes("元"));
+    const hasTicketKeyword = /票|seat|區|席|zone|張/i.test(lower);
+    return hasPrice || hasTicketKeyword;
+}
+
+function collectTicketContainers() {
+    const interactiveSelectors = [
+        'button',
+        'select',
+        'input[type="number"]',
+        'input[role="spinbutton"]',
+        '[role="button"]',
+    ].join(', ');
+
+    const interactiveElements = Array.from(document.querySelectorAll(interactiveSelectors));
+    const containers = [];
+    const seen = new Set();
+
+    for (const element of interactiveElements) {
+        const container = findTicketContainer(element);
+        if (!container || seen.has(container)) {
+            continue;
+        }
+
+        const text = getNormalizedText(container);
+        if (!isPotentialTicketContainer(text)) {
+            continue;
+        }
+
+        seen.add(container);
+        containers.push(container);
+    }
+
+    return containers;
+}
+
+function reorderTicketContainers(containers, order) {
+    const cloned = [...containers];
+    switch (order) {
+        case "bottom-up":
+            return cloned.reverse();
+        case "middle":
+            const mid = Math.floor(cloned.length / 2);
+            return [...cloned.slice(mid), ...cloned.slice(0, mid)];
+        case "top-down":
+        default:
+            return cloned;
+    }
+}
+
+function shouldSkipTicket(text) {
+    const lower = text.toLowerCase();
+    const soldOutKeywords = [
+        "已售完",
+        "售罄",
+        "sold out",
+        "暫無",
+        "無法購買",
+        "完售",
+        "額滿",
+        "未開賣",
+        "敬請期待",
+        "not available",
+    ];
+
+    const excludeKeywords = [
+        "輪椅",
+        "身心",
+        "無障礙",
+        "wheelchair",
+        "disabled",
+        "愛心",
+    ];
+
+    if (soldOutKeywords.some(keyword => lower.includes(keyword))) {
+        return true;
+    }
+
+    return excludeKeywords.some(keyword => lower.includes(keyword));
+}
+
+function buttonHasPlusIntent(button) {
+    const text = (button.textContent || "").trim();
+    const aria = (button.getAttribute("aria-label") || button.title || "").trim();
+    const datasetValues = Object.values(button.dataset || {}).join(" ");
+    const classNames = Array.from(button.classList || []).join(" ");
+
+    const combined = `${text} ${aria} ${datasetValues} ${classNames}`.toLowerCase();
+    const keywords = ["+", "＋", "add", "increase", "plus", "加", "增加", "加購"];
+
+    if (keywords.some(keyword => combined.includes(keyword))) {
+        return true;
+    }
+
+    const svgTitle = button.querySelector('svg title');
+    if (svgTitle) {
+        const svgText = svgTitle.textContent.toLowerCase();
+        if (keywords.some(keyword => svgText.includes(keyword))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function findPlusButton(container) {
+    const buttons = Array.from(container.querySelectorAll('button, [role="button"]'));
+    return buttons.find(buttonHasPlusIntent) || null;
+}
+
+function setTicketQuantity(container, rawCount) {
+    const count = Number(rawCount) || 0;
+    if (count <= 0) {
+        return false;
+    }
+
+    const plusButton = findPlusButton(container);
+    if (plusButton) {
+        for (let i = 0; i < count; i += 1) {
+            setTimeout(() => {
+                plusButton.removeAttribute("disabled");
+                simulateClick(plusButton);
+            }, i * 80);
+        }
+        return true;
+    }
+
+    const select = container.querySelector('select');
+    if (select) {
+        const option = Array.from(select.options).find(opt => {
+            const optionValue = opt.value.trim();
+            const optionText = (opt.textContent || "").trim();
+            return Number(optionValue) === count || Number(optionText) === count;
+        });
+
+        if (option) {
+            select.value = option.value;
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+    }
+
+    const numberInput = Array.from(container.querySelectorAll('input[type="number"], input[role="spinbutton"]'))
+        .find(input => !input.disabled);
+
+    if (numberInput) {
+        numberInput.removeAttribute("disabled");
+        numberInput.value = count;
+        numberInput.dispatchEvent(new Event('input', { bubbles: true }));
+        numberInput.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+    }
+
+    return false;
+}
+
+function escapeCssIdentifier(value) {
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+        return CSS.escape(value);
+    }
+    return value.replace(/([\.\#\[\]:])/g, "\\$1");
+}
+
+function getAssociatedLabelText(input) {
+    if (!input) {
+        return "";
+    }
+
+    const id = input.id;
+    if (id) {
+        const escaped = escapeCssIdentifier(id);
+        const label = document.querySelector(`label[for="${escaped}"]`);
+        if (label) {
+            return label.innerText || label.textContent || "";
+        }
+    }
+
+    const closestLabel = input.closest('label');
+    if (closestLabel) {
+        return closestLabel.innerText || closestLabel.textContent || "";
+    }
+
+    const parentText = input.parentElement ? (input.parentElement.innerText || input.parentElement.textContent || "") : "";
+    return parentText;
+}
+
+function agreeToTerms() {
+    const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+    const target = checkboxes.find((checkbox) => {
+        const labelText = getAssociatedLabelText(checkbox).toLowerCase();
+        if (!labelText) {
+            return false;
+        }
+        return labelText.includes("同意") || labelText.includes("已閱讀") || labelText.includes("terms");
+    });
+
+    if (target && !target.checked) {
+        simulateClick(target);
+        console.log("☑️ 已勾選同意條款");
+        return true;
+    }
+
+    return false;
+}
+
+function clickNextStepButton() {
+    const keywords = [
+        "下一步",
+        "下一頁",
+        "下一步驟",
+        "填寫資料",
+        "前往付款",
+        "立即結帳",
+        "確認訂單",
+        "Proceed",
+        "Next",
+    ];
+
+    const elements = Array.from(document.querySelectorAll('button, [role="button"], a[href]'));
+    const target = elements.find((element) => {
+        if (element.disabled || element.getAttribute('aria-disabled') === 'true') {
+            return false;
+        }
+
+        const text = (element.innerText || element.textContent || "").trim();
+        const aria = (element.getAttribute('aria-label') || element.title || "").trim();
+        const datasetValues = Object.values(element.dataset || {}).join(" ");
+        const combined = `${text} ${aria} ${datasetValues}`.toLowerCase();
+
+        if (combined.includes("上一步")) {
+            return false;
+        }
+
+        return keywords.some(keyword => combined.includes(keyword.toLowerCase()));
+    });
+
+    if (target) {
+        simulateClick(target);
+        console.log("🎯 點擊下一步按鈕");
+        return true;
+    }
+
+    console.warn("⚠️ 找不到下一步按鈕");
+    return false;
+}
+
+function trySelectTicket(setting) {
+    const nameKeywords = generateKeywordList(setting.name).map(keyword => keyword.toLowerCase());
+    const priceKeywords = generateKeywordList(setting.price).map(keyword => keyword.toLowerCase());
+    const count = Number(setting.count) || 1;
+
+    let ticketContainers = collectTicketContainers();
+    if (ticketContainers.length === 0) {
+        return false;
+    }
+
+    ticketContainers = reorderTicketContainers(ticketContainers, setting.priceOrder);
+
+    for (const container of ticketContainers) {
+        const text = getNormalizedText(container);
+        if (!text) {
+            continue;
+        }
+
+        if (shouldSkipTicket(text)) {
+            continue;
+        }
+
+        const textLower = text.toLowerCase();
+        const priceComparable = normalizeForPriceComparison(text);
+
+        const matchName = nameKeywords.length === 0 || nameKeywords.some(keyword => textLower.includes(keyword));
+        const matchPrice = priceKeywords.length === 0 || priceKeywords.some(keyword => priceComparable.includes(keyword.replace(/[\s,，]/g, "")));
+
+        if (!matchName && !matchPrice) {
+            continue;
+        }
+
+        const success = setTicketQuantity(container, count);
+        if (success) {
+            console.log("✅ 已選擇票種", text);
+            const delay = Math.max(600, count * 120);
+            setTimeout(() => {
+                agreeToTerms();
+                clickNextStepButton();
+            }, delay);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function startTicketScript() {
-    chrome.storage.local.get(["kktix_settings", "botEnabled"], (data) => {
-        const setting = data.kktix_settings;
+    chrome.storage.local.get(["ticketplus_settings", "botEnabled"], (data) => {
+        const setting = data.ticketplus_settings;
         const botEnabled = data.botEnabled;
 
         if (!botEnabled) {
             console.log("⏸️ 機器人目前關閉中，跳過搶票流程");
             return;
         }
-        // 將 name 與 price 關鍵字用空格分割成陣列
-        const nameKeywords = (setting.name || "").split(/\s+/).filter(Boolean);
-        const priceKeywords = (setting.price || "").split(/\s+/).filter(Boolean);
 
-        let ticketBoxes = Array.from(document.querySelectorAll('.display-table'));
-        let found = false;
-
-        switch (setting.priceOrder) {
-            case "bottom-up":
-                ticketBoxes.reverse();
-                break;
-            case "middle":
-                const mid = Math.floor(ticketBoxes.length / 2);
-                ticketBoxes = [...ticketBoxes.slice(mid), ...ticketBoxes.slice(0, mid)];
-                break;
-            case "top-down":
-            default:
-                // 保持原本順序
-                break;
+        if (!setting) {
+            console.log("⚠️ 尚未設定搶票條件");
+            return;
         }
 
-        for (const box of ticketBoxes) {
-            const name = box.querySelector('.ticket-name');
-            const price = box.querySelector('.ticket-price')?.textContent.trim() || "";
-
-            let cleanName = "";
-            for (const node of name.childNodes) {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    cleanName += node.textContent.trim();
-                }
+        const success = trySelectTicket(setting);
+        if (!success) {
+            if (setting.autoReload) {
+                console.log("沒有符合條件的票券，準備自動重新整理...");
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                console.warn("找不到符合條件的票券");
             }
-            cleanName = cleanName.replace(/\s+/g, " ").trim();
-            const cleanPrice = price.replace(/,/g, "").replace(/\s+/g, "");
-
-            // 判斷 name 或 price 任一關鍵字有符合就成立
-            const matchName = nameKeywords.length === 0 || nameKeywords.some(keyword => cleanName.includes(keyword));
-            const matchPrice = priceKeywords.length === 0 || priceKeywords.some(keyword => cleanPrice.includes(keyword));
-
-            if (matchName || matchPrice) {
-                console.log("✅ 找到票種", cleanName, cleanPrice);
-                found = true;
-
-                const plusButton = box.querySelector('.btn-default.plus');
-
-                if (plusButton) {
-                    // 強制啟用按鈕（Angular 可能禁用）
-                    plusButton.removeAttribute("disabled");
-
-                    for (let i = 0; i < setting.count; i++) {
-                        setTimeout(() => {
-                            plusButton.removeAttribute("disabled"); // 再次確保可點
-                            simulateClick(plusButton);
-                            console.log(`🎫 點擊第 ${i + 1} 張`);
-                        }, i * 1);
-                    }
-
-
-                    // 等票數點擊完後再勾條款與下一步
-                    setTimeout(() => {
-                        // ✅ 勾選同意條款
-                        const agreeCheckbox = document.querySelector('#person_agree_terms');
-                        if (agreeCheckbox && !agreeCheckbox.checked) {
-                            simulateClick(agreeCheckbox);
-                            // console.log("☑️ 勾選同意條款");
-                        }
-
-                        // ✅ 點擊下一步按鈕
-                        const nextBtn = [...document.querySelectorAll('button')]
-                            .find(btn => btn.textContent.includes("下一步") && !btn.disabled);
-
-                        if (nextBtn) {
-                            simulateClick(nextBtn);
-                            console.log("🎯 點擊下一步完成");
-                        } else {
-                            console.warn("⚠️ 找不到下一步按鈕");
-                        }
-                    }, setting.count * 1);
-
-                    break;
-                }
-            }
-        }
-        // 自動刷新
-        if (!found && setting.autoReload) {
-            console.log("沒有符合條件的票，準備自動重新整理...");
-            setTimeout(() => {
-                location.reload();
-            }, 100); // 延遲 100 豪秒避免過度刷新
         }
     });
 }
-
-function removeUnwantedTickets() {
-    const wrapper = document.querySelector('.banner-wrapper');
-    if (wrapper) {
-        wrapper.remove();
-    }
-    const allTickets = document.querySelectorAll('.ticket-unit');
-
-    allTickets.forEach(ticketBox => {
-        const nameElement = ticketBox.querySelector('.ticket-name');
-        const soldOutElement = ticketBox.querySelector('.ticket-quantity.ng-binding');
-
-        const nameText = nameElement?.innerText.trim() || '';
-        const soldOutText = soldOutElement?.innerText.trim() || '';
-
-        const nameKeywordsToExclude = ['輪椅', '身心障礙', '無障礙', "身障"];
-        const isExcludedByName = nameKeywordsToExclude.some(keyword => nameText.includes(keyword));
-        const isSoldOut = soldOutText.includes('已售完');
-
-        if (isExcludedByName || isSoldOut) {
-            ticketBox.remove();
-            // console.log('🚫 已移除不符合條件票種：', nameText || soldOutText);
-        }
-    });
-}
-
 
 function injectScript(filePath) {
     const script = document.createElement("script");
     script.setAttribute("type", "text/javascript");
-    script.src = chrome.runtime.getURL(filePath);  // 動態取得正確路徑
+    script.src = chrome.runtime.getURL(filePath);
     document.documentElement.appendChild(script);
     script.remove();
 }
 
-injectScript("inject.js");
+function waitForTicketData() {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20;
 
+    const interval = setInterval(() => {
+        attempts += 1;
+        const containers = collectTicketContainers();
+        if (containers.length > 0) {
+            console.log("✅ 票券資訊載入完成");
+            clearInterval(interval);
+            startTicketScript();
+            return;
+        }
 
-// ✅ 等待票種載入才執行主程式
-const checkExist = setInterval(() => {
-    const ticketBoxes = document.querySelectorAll('.display-table');
-    if (ticketBoxes.length > 0) {
-        console.log("✅ 搶票頁面載入完成，開始搶票");
-        clearInterval(checkExist);
-        removeUnwantedTickets();
-        startTicketScript();
-    } else {
-        console.log("⌛ 等待票種載入中...");
+        if (attempts >= MAX_ATTEMPTS) {
+            clearInterval(interval);
+            console.warn("⚠️ 未偵測到票券資訊，仍嘗試執行腳本");
+            startTicketScript();
+            return;
+        }
+
+        console.log("⌛ 等待票券載入中...");
+    }, 500);
+}
+
+(function init() {
+    const path = window.location.pathname;
+    if (!/(activity|event)/i.test(path) || !/\/order/i.test(path)) {
+        return;
     }
-}, 500);
+
+    injectScript("inject.js");
+    waitForTicketData();
+})();
