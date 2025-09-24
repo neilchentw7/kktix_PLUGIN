@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "KKTIX Auto Ticket",
-    "version": "1.0",
-    "description": "自動搶票工具",
+    "name": "TicketPlus Auto Ticket",
+    "version": "1.1",
+    "description": "TicketPlus 自動搶票工具",
     "permissions": [
         "storage",
         "tabs",
@@ -12,13 +12,14 @@
         "service_worker": "background.js"
     },
     "action": {
-        "default_title": "KKTIX Auto Ticket",
+        "default_title": "TicketPlus Auto Ticket",
         "default_popup": "options.html"
     },
     "content_scripts": [
         {
             "matches": [
-                "https://*.kktix.cc/events/*"
+                "https://ticketplus.com.tw/*",
+                "https://www.ticketplus.com.tw/*"
             ],
             "js": [
                 "content.js"
@@ -27,7 +28,8 @@
         },
         {
             "matches": [
-                "https://kktix.com/events/*/registrations/*"
+                "https://ticketplus.com.tw/*",
+                "https://www.ticketplus.com.tw/*"
             ],
             "js": [
                 "detail_script.js"
