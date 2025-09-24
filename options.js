@@ -9,8 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const priceOrderInput = document.getElementById("priceOrder");
 
     // 載入設定
-    chrome.storage.local.get("kktix_settings", (data) => {
-        const settings = data.kktix_settings;
+    chrome.storage.local.get("ticketplus_settings", (data) => {
+        const settings = data.ticketplus_settings;
 
         if (settings) {
             sessionInput.value = settings.session || "";
@@ -22,11 +22,11 @@ document.addEventListener("DOMContentLoaded", () => {
             dateOrderInput.value = settings.dateOrder || "top-down";
             priceOrderInput.value = settings.priceOrder || "top-down";
         } else {
-            dateInput.placeholder = "例如：2025/06/01";
-            priceInput.placeholder = "例如：3000 或 TWD$3,000";
+            dateInput.placeholder = "例如：2025/07/12 或 07/12";
+            priceInput.placeholder = "例如：3000 或 NT$3,000";
             nameInput.placeholder = "例如：VIP、紅2E";
             countInput.placeholder = "購買張數，如 2";
-            sessionInput.placeholder = "例如：高雄、下午場";
+            sessionInput.placeholder = "例如：台北 下午場";
         }
     });
 
@@ -41,8 +41,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const priceOrder = priceOrderInput.value;
         const session = sessionInput.value;
 
-        if (date && !date.match(/^\d{2}\/\d{2}$/)) {
-            alert("請輸入正確的搶票日期格式，例如 07/20");
+        if (date && !date.match(/^(\d{2}\/\d{2}|\d{4}\/\d{2}\/\d{2})$/)) {
+            alert("請輸入正確的搶票日期格式，例如 07/20 或 2025/07/20");
             return;
         }
 
@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         chrome.storage.local.set({
-            kktix_settings: { date, price, count, name, autoReload, dateOrder, priceOrder, session }
+            ticketplus_settings: { date, price, count, name, autoReload, dateOrder, priceOrder, session }
         }, () => {
             alert("設定已儲存！");
         });

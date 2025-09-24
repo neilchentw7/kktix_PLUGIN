@@ -2,6 +2,7 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.action.setBadgeText({ text: "OFF" });
     chrome.action.setBadgeBackgroundColor({ color: "#d9534f" });
     chrome.storage.local.set({ botEnabled: false });
+    chrome.storage.local.remove("kktix_settings");
 });
 
 chrome.commands.onCommand.addListener((command) => {
